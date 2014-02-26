@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+
+<head>
+<title>Robutt</title>
+<meta http-equiv=Content-Type content=text/html;charset=UTF-8>
+
+<!-- {{{ Style -->
+<style type=text/css>
+
+body { background-image: url("/bg.png")
+     ; background-repeat: repeat
+     ; color: #f0f0f0
+     ; font-family: "Avant Garde", sans-serif
+     ; width: 100%
+     ; height: 100%
+     ; margin: 0
+     ; padding: 0
+     }
+
+header { font-size: 400%
+       ; margin-bottom: 20px
+       ; background-color: rgba(255, 255, 255, 0.2)
+       ; margin: 0 auto
+       ; width: 640px
+       ; border-bottom-left-radius: 15px
+       ; border-bottom-right-radius: 15px
+       ; padding-bottom: 10px
+       }
+
+#wrap > * { text-shadow: 0 0 3px white
+      ; text-align: center
+      ; vertical-align: middle
+      ; height: 100%
+      ; min-height: 100%
+      ; background-image: url("/purp.png")
+      ; background-position: 0 0
+      ; background-repeat: repeat
+      ; background-attachment: fixed
+      }
+
+#controls { background-color: rgba(255, 255, 255, 0.2)
+          ; width: 360px
+          ; margin: 0 auto
+          ; padding: 0px 0px 40px 0px
+          ; font-size: 70px
+          ; border-bottom-left-radius: 15px
+          ; border-bottom-right-radius: 15px
+          }
+
+#controls input[type="button"]
+    { background: transparent
+    ; border: none
+    ; font-size: 70px
+    ; color: white
+    ; text-shadow: 0 0 3px white
+    }
+
+#controls input[type="button"]:hover
+    { color: #101010 }
+
+#controls .mid, #back, #front
+    { display: block
+    ; margin: 0 auto
+    }
+
+#back { margin-top: 20px }
+
+#controls .mid { padding: 20px 0px }
+
+#popup { display: none
+       ; width: 100%
+       }
+
+#popup > div { background-image: url("/purp.png")
+             ; background-attachment: fixed
+             ; text-align: center
+             ; font-size: 70px
+             ; margin: 0 auto
+             ; width: 50%
+             ; text-shadow: 0 0 3px
+             ; border-radius: 15px 15px
+             }
+
+</style>
+<!-- }}} -->
+
+<!-- {{{ Script -->
+<script type=text/javascript>
+
+// XXX
+//  - What is better for sending commands to the robot?
+//      - Send command at timed intervals
+//      - Send start and stop commands
+
+
+// {{{ Constants
+
+var port = "8081"
+
+// }}}
+
+// {{{ State variables
+
+var ws = null
+
+var controls = {}
+
+var connecting = null
+
+// }}}
+
+// TODO
+// connect :: IO ()
+function connect() {
+    ws = new WebSocket("ws://" + window.location.hostname + ":" + port)
+
+    ws.onmessage = function(e) {
+        console.log(e.data, "white")
+    }
+
+    ws.onerror = function(e) {
+        popup(e, "red")
+
+        connecting = setInterval(function() {
+            ws = new WebSocket("ws://" + window.location.hostname + ":" + port)
+        }, 10000)
+    }
+
+    ws.onopen = function(e) {
+        if (connecting !== null) clearInterval(connecting)
+
+        popup("Connected")
+
+        ws.send("hi")
+    }
+}
+
+// TODO
+// popup :: String -> String -> IO ()
+function popup(s, c) {
+    var p = document.querySelector("#popup")
+    var k = document.querySelector("#controls")
+
+    p.style.display = "block"
+    p.children[0].textContent = s
+    p.children[0].style.color = c
+    k.style.borderBottomLeftRadius = "0px"
+    k.style.borderBottomRightRadius = "0px"
+
+    setTimeout(function() {
+        p.style.display = "none"
+        k.style.borderBottomLeftRadius = "15px"
+        k.style.borderBottomRightRadius = "15px"
+    }, 1000)
+}
+
+// robuttSend :: String -> IO ()
+function robuttSend(s) {
+    console.log(s)
+    ws.send(s)
+}
+
+
+function main() {
+    connect()
+
+    document.body.addEventListener('keydown', function(e) {
+        dir = null
+
+        if ([37,65].indexOf(e.keyCode) !== -1) {
+            dir = "left"
+
+        } else if ([38,87].indexOf(e.keyCode) !== -1) {
+            dir = "front"
+
+        } else if ([39,68].indexOf(e.keyCode) !== -1) {
+            dir = "right"
+
+        } else if ([40,83].indexOf(e.keyCode) !== -1) {
+            dir = "back"
+        }
+
+        if (dir in controls) null
+        else {
+            controls[dir] = true
+            if (dir) robuttSend(dir)
+            document.getElementById(dir).style.color = "#101010"
+        }
+    })
+
+    document.body.addEventListener('keyup', function(e) {
+        dir = null
+
+        if ([37,65].indexOf(e.keyCode) !== -1) {
+            dir = "left"
+
+        } else if ([38,87].indexOf(e.keyCode) !== -1) {
+            dir = "front"
+
+        } else if ([39,68].indexOf(e.keyCode) !== -1) {
+            dir = "right"
+
+        } else if ([40,83].indexOf(e.keyCode) !== -1) {
+            dir = "back"
+        }
+
+        if (dir in controls) {
+            delete controls[dir]
+            document.getElementById(dir).style.color = ""
+            dir = ""
+            for (var d in controls) dir = d
+            if (dir) robuttSend("stop " + dir)
+        }
+    })
+
+    var dirs = [ "left", "front", "right", "back" ]
+
+    var df = function(e) {
+        var dir = this.id
+        if (dir in controls) null
+        else {
+            controls[dir] = true
+            if (dir) robuttSend(dir)
+            document.getElementById(dir).style.color = "#101010"
+        }
+    }
+
+    var uf = function(e) {
+        var dir = this.id
+        if (dir in controls) {
+            delete controls[dir]
+            document.getElementById(dir).style.color = ""
+            dir = ""
+            for (var d in controls) dir = d
+            if (dir) robuttSend("stop " + dir)
+        }
+    }
+
+    for (var i = 0; i < dirs.length; i++) {
+        console.log("event " + dirs[i])
+        document.querySelector('#' + dirs[i]).addEventListener("mousedown", df)
+        document.querySelector('#' + dirs[i]).addEventListener("mouseover", df)
+        document.querySelector('#' + dirs[i]).addEventListener("mouseup", uf)
+        document.querySelector('#' + dirs[i]).addEventListener("mouseout", uf)
+    }
+}
+
+</script>
+<!-- }}} -->
+
+</head>
+
+<body>
+
+<div id=wrap>
+<header>
+Control the robutt
+</header>
+<div id=controls>
+<input type=button id=front value=&uarr;
+<span class=mid>
+<input type=button id=left value=&larr;> &#9000; <input type=button id=right value=&rarr;
+</span>
+<input type=button id=back value=&darr;>
+</div>
+</div>
+
+<div id=popup>
+<div></div>
+</div>
+
+<script> main() </script>
+
+</body>
